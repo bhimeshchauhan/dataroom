@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: dataroom
+      POSTGRES_USER: dataroom
+      POSTGRES_PASSWORD: dataroom
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dataroom"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    ports:
+      - "5000:5000"
+    environment:
+      DATABASE_URL: postgresql://dataroom:dataroom@db:5432/dataroom
+      STORAGE_PATH: /app/storage
+      MAX_FILE_SIZE: "52428800"
+      CORS_ORIGINS: "http://localhost:5173,http://localhost:4173"
+    volumes:
+      - file_storage:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:80"
+
+volumes:
+  pgdata:
+  file_storage:
