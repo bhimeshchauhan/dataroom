@@ -1,6 +1,6 @@
 import logging
 
-from flask import Flask
+from flask import Flask, request
 from flask_cors import CORS
 from flask_migrate import Migrate
 
@@ -64,9 +64,24 @@ def create_app(config_name=None):
     @app.after_request
     def add_security_headers(response):
         response.headers.setdefault('X-Content-Type-Options', 'nosniff')
-        response.headers.setdefault('X-Frame-Options', 'DENY')
         response.headers.setdefault('Referrer-Policy', 'no-referrer')
-        response.headers.setdefault('Cross-Origin-Resource-Policy', 'same-site')
+
+        is_pdf_content = (
+            request.path.startswith('/api/v1/files/')
+            and request.path.endswith('/content')
+        )
+
+        if is_pdf_content:
+            # Allow iframe embedding from configured frontend origins.
+            origins = [o.strip() for o in app.config.get('CORS_ORIGINS', []) if o.strip()]
+            frame_ancestors = " ".join(["'self'"] + origins)
+            response.headers['Content-Security-Policy'] = f'frame-ancestors {frame_ancestors};'
+            response.headers['Cross-Origin-Resource-Policy'] = 'cross-origin'
+            response.headers.pop('X-Frame-Options', None)
+        else:
+            response.headers.setdefault('X-Frame-Options', 'DENY')
+            response.headers.setdefault('Cross-Origin-Resource-Policy', 'same-site')
+
         return response
 
     with app.app_context():

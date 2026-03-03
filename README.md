@@ -50,6 +50,9 @@ cd ../frontend
 export VITE_API_URL=http://localhost:5173
 npm run test:e2e
 ```
+---
+## Live Demo link : https://bhimeshchauhan.github.io/dataroom/
+---
 
 ## Cloud Demo Deployment
 
@@ -65,8 +68,34 @@ See the full guide: [`docs/deployment/cloud-demo.md`](docs/deployment/cloud-demo
 
 - Filename/folder name search in current container (`search` query param + UI search bar)
 
+## Video
+
+<div>
+  <a href="https://www.loom.com/share/a90c3c4321304106a055b37bea3f87d0">
+    <p>Demo</p>
+  </a>
+  <a href="https://www.loom.com/share/a90c3c4321304106a055b37bea3f87d0">
+    <img style="max-width:300px;" src="https://cdn.loom.com/sessions/thumbnails/a90c3c4321304106a055b37bea3f87d0-1fedc5387e7f43bf-full-play.gif#t=0.1">
+  </a>
+</div>
+
 ## Screenshots
 
+### Home  
+  ![PDF viewer](docs/screenshots/5.png)
+### Folder view  
+  ![List view](docs/screenshots/3.png)
+### Data room detail  
+  ![Detail view](docs/screenshots/2.png)
+### Folder creation  
+  ![PDF viewer](docs/screenshots/4.png)
+### Search  
+  ![PDF viewer](docs/screenshots/1.png)
+### Delete  
+  ![PDF viewer](docs/screenshots/7.png)
+  ![PDF viewer](docs/screenshots/6.png)
+### PDF Viewer  
+  ![PDF viewer](docs/screenshots/8.png)
 
 ## Design Decisions
 
@@ -117,17 +146,18 @@ See the full guide: [`docs/deployment/cloud-demo.md`](docs/deployment/cloud-demo
 
 ### Future Work
 - **Authentication** - JWT tokens with Flask-Login or Auth0. Add `user_id` to datarooms for ownership. Row-level access control.
-- **Persistent object storage** - Switch local storage to Cloudflare R2 or S3.
 - **Identity-based quotas** - Move from IP-based limits to authenticated user/org quotas and billing plans.
 - **Centralized rate-limit store** - Use Redis-backed rate limit storage for multi-instance consistency.
 - **Full-text search** - Extract PDF text with PyPDF2, index with Postgres tsvector. Search bar in header.
 - **Drag-and-drop moving** - Move files/folders between folders via drag in the sidebar or a "Move to..." dialog.
 - **File versioning** - Track upload history, allow rollback.
 - **Real-time updates** - WebSocket notifications when other users modify the data room.
-- **Broader test coverage** - Frontend component tests, additional E2E scenarios beyond the existing Playwright smoke suite.
+- **Comprehensive test suite** - Integration tests, E2E with Playwright, frontend component tests.
 - **Background jobs** - Celery for hard-delete cleanup, PDF text extraction, thumbnail generation.
 
 ## API Reference
+
+### Live: https://dataroom-api-8z73.onrender.com/api/docs
 
 Base URL: `/api/v1`
 
