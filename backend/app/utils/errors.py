@@ -31,6 +31,13 @@ class ValidationError(AppError):
         super().__init__(message, 400)
 
 
+class UnauthorizedError(AppError):
+    """Authentication required or token invalid."""
+
+    def __init__(self, message='Unauthorized'):
+        super().__init__(message, 401)
+
+
 def register_error_handlers(app):
     """Register JSON error handlers on the Flask app."""
 

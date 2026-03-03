@@ -103,7 +103,7 @@ See the full guide: [`docs/deployment/cloud-demo.md`](docs/deployment/cloud-demo
 - **Separate frontend/backend** - SPA calls REST API. Deploy and scale each service independently.
 - **Flask over Django** - Kept the backend small and explicit for this scope.
 - **Multiple data rooms** - Each room is an independent top-level container.
-- **IP-scoped demo isolation** - In demo mode, rooms are scoped by client IP (`X-Forwarded-For`/remote address).
+- **JWT auth + user ownership** - Users register/login with email+password and can only access their own datarooms/files.
 
 ### Database
 - **Three tables: datarooms + folders + files** - Simple model for this scope; files can exist at room root or inside folders.
@@ -114,13 +114,13 @@ See the full guide: [`docs/deployment/cloud-demo.md`](docs/deployment/cloud-demo
 ### File Storage
 - **Storage abstraction (local or S3-compatible)** - Files are stored with UUID keys and can use local disk (`STORAGE_BACKEND=local`) or object storage (`STORAGE_BACKEND=s3`). No user input ever touches the filesystem key/path.
 - **Persistent disk demo setup** - Current Render deployment uses `STORAGE_BACKEND=local` and `STORAGE_PATH=/var/data/storage` backed by a Persistent Disk.
-- **Free-plan quota per IP** - Total stored bytes are capped per client IP (`FREE_STORAGE_QUOTA_BYTES`, default 800MB).
-- **Usage visibility in UI** - Dataroom view shows storage usage progress bar (`used / quota`) for the current IP.
+- **Free-plan quota per user** - Total stored bytes are capped per authenticated user (`FREE_STORAGE_QUOTA_BYTES`, default 800MB).
+- **Usage visibility in UI** - Dataroom view shows storage usage progress bar (`used / quota`) for the current signed-in user.
 - **Triple PDF validation** - Extension + Content-Type + magic bytes (`%PDF`).
 - **25MB file size limit** - Configurable via `MAX_FILE_SIZE`. Checked before writing to disk.
 
 ### Security & Abuse Protection
-- **Safer caller identity defaults** - Proxy headers are ignored by default (`TRUST_PROXY_HEADERS=false`) to avoid client-side header spoofing. Enable only when running behind a trusted ingress proxy.
+- **Simple JWT sessions** - Auth endpoints issue JWTs; protected endpoints require bearer tokens.
 - **Per-endpoint rate limiting** - IP-based limits for write and read endpoints.
 - **Upload throttle** - `POST /datarooms/:id/files` is limited to `10 requests / 5 minutes / IP`.
 - **Mutation limits** - Create/rename/delete endpoints are rate limited.
@@ -132,7 +132,7 @@ See the full guide: [`docs/deployment/cloud-demo.md`](docs/deployment/cloud-demo
 ### Frontend
 - **Two-view SPA** - Landing page (data room grid) and detail view (sidebar tree + content panel). State managed in App.tsx with hash-based deep linking.
 - **shadcn/ui components** - Reused primitives for consistent styling and basic accessibility.
-- **react-pdf** - In-app PDF viewing with page navigation, keyboard shortcuts, and fallback to browser tab.
+- **Native PDF iframe viewer** - In-app PDF viewing in a modal iframe, with open-in-new-tab fallback.
 - **Refresh after writes** - Folder tree and content panel are refreshed after mutations.
 - **Filename search** - Search box filters file/folder names within the currently viewed root folder/folder.
 
@@ -145,8 +145,8 @@ See the full guide: [`docs/deployment/cloud-demo.md`](docs/deployment/cloud-demo
 - **Stateless backend** - No server-side sessions.
 
 ### Future Work
-- **Authentication** - JWT tokens with Flask-Login or Auth0. Add `user_id` to datarooms for ownership. Row-level access control.
-- **Identity-based quotas** - Move from IP-based limits to authenticated user/org quotas and billing plans.
+- **Organization model** - Add teams/workspaces, invitations, and role-based access (owner/editor/viewer).
+- **Token hardening** - Add refresh tokens + token revocation support for explicit logout-from-all-devices.
 - **Centralized rate-limit store** - Use Redis-backed rate limit storage for multi-instance consistency.
 - **Full-text search** - Extract PDF text with PyPDF2, index with Postgres tsvector. Search bar in header.
 - **Drag-and-drop moving** - Move files/folders between folders via drag in the sidebar or a "Move to..." dialog.
@@ -161,8 +161,14 @@ See the full guide: [`docs/deployment/cloud-demo.md`](docs/deployment/cloud-demo
 
 Base URL: `/api/v1`
 
+Protected endpoints require:
+`Authorization: Bearer <token>`
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| POST | `/auth/register` | Register user and return JWT |
+| POST | `/auth/login` | Login user and return JWT |
+| GET | `/auth/me` | Get current authenticated user |
 | POST | `/datarooms` | Create a data room |
 | GET | `/datarooms` | List all data rooms |
 | GET | `/datarooms/:id` | Get a data room |
@@ -185,7 +191,7 @@ Base URL: `/api/v1`
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React 18, TypeScript, Vite, Tailwind CSS v4, shadcn/ui, react-pdf, lucide-react |
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS v4, shadcn/ui, lucide-react |
 | Backend | Flask 3.1, SQLAlchemy, Flask-Migrate, Gunicorn, boto3 |
 | Database | PostgreSQL 15 |
 | Testing | Pytest + Playwright smoke |

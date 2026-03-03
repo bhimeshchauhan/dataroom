@@ -20,9 +20,9 @@ This setup uses free tiers and supports backend cold starts.
 Required:
 - `DATABASE_URL` = Neon postgres connection string
 - `CORS_ORIGINS` = frontend URL, e.g. `https://bhimeshchauhan.github.io`
-- `TRUST_PROXY_HEADERS` = `true` (required on Render so client IP can be read from proxy headers)
+- `JWT_SECRET` = long random string used to sign tokens
 - `MAX_FILE_SIZE` = `26214400` (optional; default 25MB)
-- `FREE_STORAGE_QUOTA_BYTES` = `838860800` (optional; default 800MB per IP)
+- `FREE_STORAGE_QUOTA_BYTES` = `838860800` (optional; default 800MB per user)
 - `STORAGE_BACKEND` = `local`
 - `STORAGE_PATH` = `/var/data/storage`
 

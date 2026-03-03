@@ -11,10 +11,10 @@ from app.utils.validation import validate_folder_name
 class FolderService:
 
     @staticmethod
-    def _get_active_dataroom(dataroom_id, client_ip=None):
+    def _get_active_dataroom(dataroom_id, user_id=None):
         dataroom = Dataroom.query.filter(
             Dataroom.id == str(dataroom_id),
-            Dataroom.created_by_ip == client_ip,
+            Dataroom.user_id == str(user_id),
             Dataroom.deleted_at.is_(None),
         ).first()
         if not dataroom:
@@ -22,9 +22,9 @@ class FolderService:
         return dataroom
 
     @staticmethod
-    def create(dataroom_id, name, parent_id=None, client_ip=None):
+    def create(dataroom_id, name, parent_id=None, user_id=None):
         name = validate_folder_name(name)
-        FolderService._get_active_dataroom(dataroom_id, client_ip=client_ip)
+        FolderService._get_active_dataroom(dataroom_id, user_id=user_id)
 
         parent = None
         if parent_id:
@@ -68,13 +68,13 @@ class FolderService:
         return folder
 
     @staticmethod
-    def get(folder_id, client_ip=None):
+    def get(folder_id, user_id=None):
         folder = Folder.query.join(
             Dataroom, Folder.dataroom_id == Dataroom.id
         ).filter(
             Folder.id == str(folder_id),
             Folder.deleted_at.is_(None),
-            Dataroom.created_by_ip == client_ip,
+            Dataroom.user_id == str(user_id),
             Dataroom.deleted_at.is_(None),
         ).first()
         if not folder:
@@ -82,15 +82,15 @@ class FolderService:
         return folder
 
     @staticmethod
-    def get_contents(folder_id=None, dataroom_id=None, client_ip=None, page=1, per_page=20,
+    def get_contents(folder_id=None, dataroom_id=None, user_id=None, page=1, per_page=20,
                      sort_by='name', sort_order='asc', search_query=None):
         current_folder = None
         breadcrumbs = []
 
         if folder_id:
-            current_folder = FolderService.get(folder_id, client_ip=client_ip)
+            current_folder = FolderService.get(folder_id, user_id=user_id)
             dataroom_id = current_folder.dataroom_id
-            breadcrumbs = FolderService._build_breadcrumbs(current_folder, client_ip=client_ip)
+            breadcrumbs = FolderService._build_breadcrumbs(current_folder, user_id=user_id)
             folder_query = Folder.query.filter(
                 Folder.parent_id == str(folder_id),
                 Folder.deleted_at.is_(None),
@@ -100,7 +100,7 @@ class FolderService:
                 File.deleted_at.is_(None),
             )
         elif dataroom_id:
-            FolderService._get_active_dataroom(dataroom_id, client_ip=client_ip)
+            FolderService._get_active_dataroom(dataroom_id, user_id=user_id)
             folder_query = Folder.query.filter(
                 Folder.dataroom_id == str(dataroom_id),
                 Folder.parent_id.is_(None),
@@ -176,7 +176,7 @@ class FolderService:
         }
 
     @staticmethod
-    def _build_breadcrumbs(folder, client_ip=None):
+    def _build_breadcrumbs(folder, user_id=None):
         """Build breadcrumbs from materialized path."""
         if not folder or not folder.path:
             return []
@@ -190,7 +190,7 @@ class FolderService:
             Dataroom, Folder.dataroom_id == Dataroom.id
         ).filter(
             Folder.id.in_(parts),
-            Dataroom.created_by_ip == client_ip,
+            Dataroom.user_id == str(user_id),
             Dataroom.deleted_at.is_(None),
         ).all()
 
@@ -207,9 +207,9 @@ class FolderService:
         return breadcrumbs
 
     @staticmethod
-    def rename(folder_id, name, client_ip=None):
+    def rename(folder_id, name, user_id=None):
         name = validate_folder_name(name)
-        folder = FolderService.get(folder_id, client_ip=client_ip)
+        folder = FolderService.get(folder_id, user_id=user_id)
 
         # Check uniqueness in same parent
         uniqueness_query = Folder.query.filter(
@@ -234,8 +234,8 @@ class FolderService:
         return folder
 
     @staticmethod
-    def delete(folder_id, client_ip=None):
-        folder = FolderService.get(folder_id, client_ip=client_ip)
+    def delete(folder_id, user_id=None):
+        folder = FolderService.get(folder_id, user_id=user_id)
         now = datetime.now(timezone.utc)
 
         # Find all descendant folders via materialized path
@@ -261,8 +261,8 @@ class FolderService:
         db.session.commit()
 
     @staticmethod
-    def get_tree(dataroom_id, client_ip=None):
-        FolderService._get_active_dataroom(dataroom_id, client_ip=client_ip)
+    def get_tree(dataroom_id, user_id=None):
+        FolderService._get_active_dataroom(dataroom_id, user_id=user_id)
 
         folders = Folder.query.filter(
             Folder.dataroom_id == str(dataroom_id),

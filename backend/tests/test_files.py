@@ -165,40 +165,37 @@ def test_reject_non_pdf_extension(client):
     assert response.status_code == 400
 
 
-def test_file_access_isolated_by_ip(client, sample_pdf):
-    """File metadata/content are not accessible from a different IP."""
-    client.application.config['TRUST_PROXY_HEADERS'] = True
-    create_resp = client.post(
+def test_file_access_isolated_by_user(make_authed_client, sample_pdf):
+    """File metadata/content are not accessible from a different user."""
+    owner_client = make_authed_client()
+    other_client = make_authed_client()
+    create_resp = owner_client.post(
         '/api/v1/datarooms',
         data=json.dumps({'name': 'Private Room'}),
         content_type='application/json',
-        headers={'X-Forwarded-For': '10.0.0.1'},
     )
     dataroom_id = create_resp.get_json()['id']
 
-    upload_resp = client.post(
+    upload_resp = owner_client.post(
         f'/api/v1/datarooms/{dataroom_id}/files',
         data={'file': (io.BytesIO(sample_pdf), 'private.pdf', 'application/pdf')},
         content_type='multipart/form-data',
-        headers={'X-Forwarded-For': '10.0.0.1'},
     )
     file_id = upload_resp.get_json()['id']
 
-    forbidden_meta = client.get(
+    forbidden_meta = other_client.get(
         f'/api/v1/files/{file_id}',
-        headers={'X-Forwarded-For': '10.0.0.2'},
     )
-    forbidden_content = client.get(
+    forbidden_content = other_client.get(
         f'/api/v1/files/{file_id}/content',
-        headers={'X-Forwarded-For': '10.0.0.2'},
     )
 
     assert forbidden_meta.status_code == 404
     assert forbidden_content.status_code == 404
 
 
-def test_reject_upload_when_ip_storage_quota_reached(client, sample_pdf):
-    """Uploads are rejected when per-IP free quota would be exceeded."""
+def test_reject_upload_when_user_storage_quota_reached(client, sample_pdf):
+    """Uploads are rejected when per-user free quota would be exceeded."""
     dataroom_id = _create_dataroom(client)
     client.application.config['FREE_STORAGE_QUOTA_BYTES'] = len(sample_pdf) + 10
 
@@ -218,30 +215,26 @@ def test_reject_upload_when_ip_storage_quota_reached(client, sample_pdf):
     assert 'Storage limit reached' in second_upload.get_json()['error']
 
 
-def test_storage_usage_endpoint_scoped_by_ip(client, sample_pdf):
-    """Storage usage endpoint returns usage for current caller IP."""
-    client.application.config['TRUST_PROXY_HEADERS'] = True
-    ip1_headers = {'X-Forwarded-For': '10.0.0.1'}
-    ip2_headers = {'X-Forwarded-For': '10.0.0.2'}
-
-    create_resp = client.post(
+def test_storage_usage_endpoint_scoped_by_user(make_authed_client, sample_pdf):
+    """Storage usage endpoint returns usage for current authenticated user."""
+    client_one = make_authed_client()
+    client_two = make_authed_client()
+    create_resp = client_one.post(
         '/api/v1/datarooms',
         data=json.dumps({'name': 'Usage Room'}),
         content_type='application/json',
-        headers=ip1_headers,
     )
     dataroom_id = create_resp.get_json()['id']
 
-    upload_resp = client.post(
+    upload_resp = client_one.post(
         f'/api/v1/datarooms/{dataroom_id}/files',
         data={'file': (io.BytesIO(sample_pdf), 'usage.pdf', 'application/pdf')},
         content_type='multipart/form-data',
-        headers=ip1_headers,
     )
     assert upload_resp.status_code == 201
 
-    usage_ip1 = client.get('/api/v1/storage/usage', headers=ip1_headers)
-    usage_ip2 = client.get('/api/v1/storage/usage', headers=ip2_headers)
+    usage_ip1 = client_one.get('/api/v1/storage/usage')
+    usage_ip2 = client_two.get('/api/v1/storage/usage')
 
     assert usage_ip1.status_code == 200
     assert usage_ip2.status_code == 200
@@ -250,4 +243,4 @@ def test_storage_usage_endpoint_scoped_by_ip(client, sample_pdf):
     ip2_data = usage_ip2.get_json()
     assert ip1_data['used_bytes'] > 0
     assert ip2_data['used_bytes'] == 0
-    assert ip1_data['quota_bytes'] == client.application.config['FREE_STORAGE_QUOTA_BYTES']
+    assert ip1_data['quota_bytes'] == client_one.application.config['FREE_STORAGE_QUOTA_BYTES']

@@ -1,4 +1,4 @@
-from flask import request, jsonify
+from flask import request, jsonify, g
 from flask.views import MethodView
 from flask_smorest import Blueprint
 
@@ -19,8 +19,8 @@ from app.schemas import (
     HealthSchema,
 )
 from app.extensions import limiter
+from app.utils.auth import require_auth
 from app.utils.validation import validate_pagination, validate_sort
-from app.utils.request_context import get_client_ip
 
 datarooms_bp = Blueprint(
     'datarooms',
@@ -35,13 +35,14 @@ class DataroomList(MethodView):
 
     @datarooms_bp.response(200, DataroomListSchema)
     @limiter.limit('120/minute')
+    @require_auth
     def get(self):
         """List all datarooms."""
         page, per_page = validate_pagination(request.args)
         result = DataroomService.list_all(
             page=page,
             per_page=per_page,
-            client_ip=get_client_ip(request),
+            user_id=g.current_user.id,
         )
         return jsonify(result), 200
 
@@ -49,12 +50,13 @@ class DataroomList(MethodView):
     @datarooms_bp.response(201, DataroomSchema)
     @datarooms_bp.alt_response(409, schema=AppErrorSchema, description='Duplicate name')
     @limiter.limit('20/minute')
+    @require_auth
     def post(self, json_data):
         """Create a dataroom."""
         dataroom = DataroomService.create(
             name=json_data.get('name'),
             description=json_data.get('description'),
-            client_ip=get_client_ip(request),
+            user_id=g.current_user.id,
         )
         return jsonify(dataroom.to_dict()), 201
 
@@ -65,31 +67,34 @@ class DataroomDetail(MethodView):
     @datarooms_bp.response(200, DataroomSchema)
     @datarooms_bp.alt_response(404, schema=AppErrorSchema, description='Not found')
     @limiter.limit('120/minute')
+    @require_auth
     def get(self, dataroom_id):
         """Get a dataroom by ID."""
-        dataroom = DataroomService.get(dataroom_id, client_ip=get_client_ip(request))
+        dataroom = DataroomService.get(dataroom_id, user_id=g.current_user.id)
         return jsonify(dataroom.to_dict()), 200
 
     @datarooms_bp.arguments(DataroomUpdateSchema, location='json')
     @datarooms_bp.response(200, DataroomSchema)
     @datarooms_bp.alt_response(404, schema=AppErrorSchema, description='Not found')
     @limiter.limit('30/minute')
+    @require_auth
     def patch(self, json_data, dataroom_id):
         """Update a dataroom."""
         dataroom = DataroomService.update(
             dataroom_id=dataroom_id,
             name=json_data.get('name'),
             description=json_data.get('description'),
-            client_ip=get_client_ip(request),
+            user_id=g.current_user.id,
         )
         return jsonify(dataroom.to_dict()), 200
 
     @datarooms_bp.response(204)
     @datarooms_bp.alt_response(404, schema=AppErrorSchema, description='Not found')
     @limiter.limit('20/minute')
+    @require_auth
     def delete(self, dataroom_id):
         """Delete a dataroom (soft-delete)."""
-        DataroomService.delete(dataroom_id, client_ip=get_client_ip(request))
+        DataroomService.delete(dataroom_id, user_id=g.current_user.id)
         return '', 204
 
 
@@ -99,6 +104,7 @@ class DataroomContents(MethodView):
     @datarooms_bp.response(200, ContentsSchema)
     @datarooms_bp.alt_response(404, schema=AppErrorSchema, description='Not found')
     @limiter.limit('120/minute')
+    @require_auth
     def get(self, dataroom_id):
         """Get root-level contents of a dataroom."""
         page, per_page = validate_pagination(request.args)
@@ -106,7 +112,7 @@ class DataroomContents(MethodView):
         search_query = (request.args.get('search') or '').strip() or None
         result = FolderService.get_contents(
             dataroom_id=dataroom_id,
-            client_ip=get_client_ip(request),
+            user_id=g.current_user.id,
             page=page,
             per_page=per_page,
             sort_by=sort_by,
@@ -122,9 +128,10 @@ class DataroomTree(MethodView):
     @datarooms_bp.response(200, TreeSchema)
     @datarooms_bp.alt_response(404, schema=AppErrorSchema, description='Not found')
     @limiter.limit('120/minute')
+    @require_auth
     def get(self, dataroom_id):
         """Get the folder tree of a dataroom."""
-        tree = FolderService.get_tree(dataroom_id, client_ip=get_client_ip(request))
+        tree = FolderService.get_tree(dataroom_id, user_id=g.current_user.id)
         return jsonify({'tree': tree}), 200
 
 
@@ -133,9 +140,10 @@ class StorageUsage(MethodView):
 
     @datarooms_bp.response(200, StorageUsageSchema)
     @limiter.limit('120/minute')
+    @require_auth
     def get(self):
         """Get current caller's free storage usage."""
-        usage = FileService.get_usage(client_ip=get_client_ip(request))
+        usage = FileService.get_usage(user_id=g.current_user.id)
         return jsonify(usage), 200
 
 

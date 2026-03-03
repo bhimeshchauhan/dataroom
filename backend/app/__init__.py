@@ -15,9 +15,10 @@ migrate = Migrate()
 
 # Partial unique indexes and btree indexes for PostgreSQL
 INDEX_SQL = [
-    "ALTER TABLE datarooms ADD COLUMN IF NOT EXISTS created_by_ip VARCHAR(64);",
+    "ALTER TABLE datarooms ADD COLUMN IF NOT EXISTS user_id VARCHAR(36);",
     "DROP INDEX IF EXISTS uq_active_dataroom_name;",
-    "CREATE UNIQUE INDEX IF NOT EXISTS uq_active_dataroom_name_owner ON datarooms (COALESCE(created_by_ip, ''), name) WHERE deleted_at IS NULL;",
+    "DROP INDEX IF EXISTS uq_active_dataroom_name_owner;",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_active_dataroom_name_owner ON datarooms (user_id, name) WHERE deleted_at IS NULL;",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_active_folder_name ON folders (dataroom_id, COALESCE(parent_id, '00000000-0000-0000-0000-000000000000'), name) WHERE deleted_at IS NULL;",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_active_file_name ON files (dataroom_id, COALESCE(folder_id, '00000000-0000-0000-0000-000000000000'), name) WHERE deleted_at IS NULL;",
     "CREATE INDEX IF NOT EXISTS idx_folders_path ON folders USING btree (path text_pattern_ops);",

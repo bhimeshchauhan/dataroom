@@ -57,11 +57,11 @@ class FileService:
         return size
 
     @staticmethod
-    def upload(dataroom_id, file, folder_id=None, client_ip=None):
+    def upload(dataroom_id, file, folder_id=None, user_id=None):
         # Verify dataroom exists
         dataroom = Dataroom.query.filter(
             Dataroom.id == str(dataroom_id),
-            Dataroom.created_by_ip == client_ip,
+            Dataroom.user_id == str(user_id),
             Dataroom.deleted_at.is_(None),
         ).first()
         if not dataroom:
@@ -79,7 +79,7 @@ class FileService:
 
         # Validate file
         size = FileService.validate_upload(file)
-        FileService.ensure_within_quota(client_ip=client_ip, incoming_size=size)
+        FileService.ensure_within_quota(user_id=user_id, incoming_size=size)
 
         # Sanitize filename
         original_name = secure_filename(file.filename)
@@ -136,12 +136,12 @@ class FileService:
         return file_record
 
     @staticmethod
-    def get_usage(client_ip=None):
+    def get_usage(user_id=None):
         used_bytes = (
             db.session.query(func.coalesce(func.sum(File.size_bytes), 0))
             .join(Dataroom, File.dataroom_id == Dataroom.id)
             .filter(
-                Dataroom.created_by_ip == client_ip,
+                Dataroom.user_id == str(user_id),
                 Dataroom.deleted_at.is_(None),
                 File.deleted_at.is_(None),
             )
@@ -161,8 +161,8 @@ class FileService:
         }
 
     @staticmethod
-    def ensure_within_quota(client_ip=None, incoming_size=0):
-        usage = FileService.get_usage(client_ip=client_ip)
+    def ensure_within_quota(user_id=None, incoming_size=0):
+        usage = FileService.get_usage(user_id=user_id)
         projected = usage['used_bytes'] + int(incoming_size)
         if projected > usage['quota_bytes']:
             raise ValidationError(
@@ -172,13 +172,13 @@ class FileService:
             )
 
     @staticmethod
-    def get(file_id, client_ip=None):
+    def get(file_id, user_id=None):
         file_record = File.query.join(
             Dataroom, File.dataroom_id == Dataroom.id
         ).filter(
             File.id == str(file_id),
             File.deleted_at.is_(None),
-            Dataroom.created_by_ip == client_ip,
+            Dataroom.user_id == str(user_id),
             Dataroom.deleted_at.is_(None),
         ).first()
         if not file_record:
@@ -186,13 +186,13 @@ class FileService:
         return file_record
 
     @staticmethod
-    def get_content(file_id, client_ip=None):
-        file_record = FileService.get(file_id, client_ip=client_ip)
+    def get_content(file_id, user_id=None):
+        file_record = FileService.get(file_id, user_id=user_id)
         storage = build_storage_backend(current_app.config)
         return storage.read(file_record.storage_path)
 
     @staticmethod
-    def rename(file_id, name, client_ip=None):
+    def rename(file_id, name, user_id=None):
         if not name or not isinstance(name, str):
             raise ValidationError('Name is required')
 
@@ -206,7 +206,7 @@ class FileService:
         if not name.lower().endswith('.pdf'):
             raise ValidationError('File name must end with .pdf')
 
-        file_record = FileService.get(file_id, client_ip=client_ip)
+        file_record = FileService.get(file_id, user_id=user_id)
 
         # Check uniqueness in same location
         uniqueness_query = File.query.filter(
@@ -231,7 +231,7 @@ class FileService:
         return file_record
 
     @staticmethod
-    def delete(file_id, client_ip=None):
-        file_record = FileService.get(file_id, client_ip=client_ip)
+    def delete(file_id, user_id=None):
+        file_record = FileService.get(file_id, user_id=user_id)
         file_record.deleted_at = datetime.now(timezone.utc)
         db.session.commit()

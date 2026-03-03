@@ -106,45 +106,43 @@ def test_delete_dataroom(client):
     assert list_resp.get_json()['pagination']['total'] == 0
 
 
-def test_datarooms_are_isolated_by_ip(client):
-    """Dataroom listing is scoped by caller IP."""
-    client.application.config['TRUST_PROXY_HEADERS'] = True
-    client.post(
+def test_datarooms_are_isolated_by_user(make_authed_client):
+    """Dataroom listing is scoped by authenticated user."""
+    client_one = make_authed_client()
+    client_two = make_authed_client()
+    client_one.post(
         '/api/v1/datarooms',
         data=json.dumps({'name': 'IP One Room'}),
         content_type='application/json',
-        headers={'X-Forwarded-For': '10.0.0.1'},
     )
-    client.post(
+    client_two.post(
         '/api/v1/datarooms',
         data=json.dumps({'name': 'IP Two Room'}),
         content_type='application/json',
-        headers={'X-Forwarded-For': '10.0.0.2'},
     )
 
-    ip1_list = client.get('/api/v1/datarooms', headers={'X-Forwarded-For': '10.0.0.1'})
-    ip2_list = client.get('/api/v1/datarooms', headers={'X-Forwarded-For': '10.0.0.2'})
+    user1_list = client_one.get('/api/v1/datarooms')
+    user2_list = client_two.get('/api/v1/datarooms')
 
-    assert ip1_list.status_code == 200
-    assert ip2_list.status_code == 200
-    assert ip1_list.get_json()['pagination']['total'] == 1
-    assert ip2_list.get_json()['pagination']['total'] == 1
+    assert user1_list.status_code == 200
+    assert user2_list.status_code == 200
+    assert user1_list.get_json()['pagination']['total'] == 1
+    assert user2_list.get_json()['pagination']['total'] == 1
 
 
-def test_same_dataroom_name_allowed_across_different_ips(client):
-    """Two different IP users can each create a dataroom with the same name."""
-    client.application.config['TRUST_PROXY_HEADERS'] = True
-    first = client.post(
+def test_same_dataroom_name_allowed_across_different_users(make_authed_client):
+    """Two different users can each create a dataroom with the same name."""
+    client_one = make_authed_client()
+    client_two = make_authed_client()
+    first = client_one.post(
         '/api/v1/datarooms',
         data=json.dumps({'name': 'Shared Name'}),
         content_type='application/json',
-        headers={'X-Forwarded-For': '10.0.0.1'},
     )
-    second = client.post(
+    second = client_two.post(
         '/api/v1/datarooms',
         data=json.dumps({'name': 'Shared Name'}),
         content_type='application/json',
-        headers={'X-Forwarded-For': '10.0.0.2'},
     )
 
     assert first.status_code == 201

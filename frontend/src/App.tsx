@@ -1,9 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import { Toaster } from '@/components/ui/sonner';
 import { DataroomList } from '@/components/datarooms/DataroomList';
 import { DataroomDetail } from '@/components/layout/DataroomDetail';
+import { AUTH_EXPIRED_EVENT, api } from '@/api/client';
+import { toast } from 'sonner';
 
 type View = 'list' | 'detail';
+type AuthMode = 'login' | 'register';
 
 function parseHash(): {
   view: View;
@@ -48,6 +51,12 @@ function buildHash(
 
 export default function App() {
   const initialHash = parseHash();
+  const [authLoading, setAuthLoading] = useState(true);
+  const [isAuthed, setIsAuthed] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [authSubmitting, setAuthSubmitting] = useState(false);
   const [currentView, setCurrentView] = useState<View>(initialHash.view);
   const [currentDataroomId, setCurrentDataroomId] = useState<string | null>(
     initialHash.dataroomId
@@ -56,8 +65,41 @@ export default function App() {
     initialHash.folderId
   );
 
+  useEffect(() => {
+    const bootstrapAuth = async () => {
+      const token = api.getToken();
+      if (!token) {
+        setAuthLoading(false);
+        return;
+      }
+      try {
+        await api.me();
+        setIsAuthed(true);
+      } catch {
+        api.clearToken();
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+    bootstrapAuth();
+  }, []);
+
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      setIsAuthed(false);
+      setCurrentView('list');
+      setCurrentDataroomId(null);
+      setCurrentFolderId(null);
+      window.location.hash = '#/';
+      toast.error('Session expired. Please sign in again.');
+    };
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+  }, []);
+
   // Listen for hash changes (browser back/forward)
   useEffect(() => {
+    if (!isAuthed) return;
     const handleHashChange = () => {
       const { view, dataroomId, folderId } = parseHash();
       setCurrentView(view);
@@ -66,7 +108,7 @@ export default function App() {
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
+  }, [isAuthed]);
 
   // Update hash when state changes
   const navigate = useCallback(
@@ -102,6 +144,96 @@ export default function App() {
     },
     [navigate, currentDataroomId]
   );
+
+  const handleAuthSubmit = useCallback(
+    async (e: FormEvent) => {
+      e.preventDefault();
+      setAuthSubmitting(true);
+      try {
+        const trimmedEmail = email.trim().toLowerCase();
+        const res =
+          authMode === 'register'
+            ? await api.register(trimmedEmail, password)
+            : await api.login(trimmedEmail, password);
+        api.setToken(res.token);
+        setIsAuthed(true);
+        toast.success(authMode === 'register' ? 'Account created' : 'Signed in');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Authentication failed');
+      } finally {
+        setAuthSubmitting(false);
+      }
+    },
+    [authMode, email, password]
+  );
+
+  if (authLoading) {
+    return <div className="p-8 text-sm text-muted-foreground">Loading...</div>;
+  }
+
+  if (!isAuthed) {
+    return (
+      <>
+        <div className="min-h-screen bg-muted/30 flex items-center justify-center p-6">
+          <form
+            className="w-full max-w-sm rounded-xl border bg-card p-6 space-y-4"
+            onSubmit={handleAuthSubmit}
+          >
+            <div>
+              <h1 className="text-xl font-semibold">Data Room Sign In</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Use your email and password to continue.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Email</label>
+              <input
+                type="email"
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Password</label>
+              <input
+                type="password"
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                minLength={8}
+                required
+              />
+            </div>
+            <button
+              type="submit"
+              className="w-full rounded-md bg-primary text-primary-foreground py-2 text-sm font-medium disabled:opacity-60"
+              disabled={authSubmitting}
+            >
+              {authSubmitting
+                ? 'Please wait...'
+                : authMode === 'register'
+                ? 'Create account'
+                : 'Sign in'}
+            </button>
+            <button
+              type="button"
+              className="w-full text-sm text-muted-foreground hover:text-foreground"
+              onClick={() =>
+                setAuthMode((prev) => (prev === 'login' ? 'register' : 'login'))
+              }
+            >
+              {authMode === 'login'
+                ? "Don't have an account? Register"
+                : 'Already have an account? Sign in'}
+            </button>
+          </form>
+        </div>
+        <Toaster richColors position="bottom-right" />
+      </>
+    );
+  }
 
   return (
     <>

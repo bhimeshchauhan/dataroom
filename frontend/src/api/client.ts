@@ -9,6 +9,8 @@ import type {
 } from '@/types';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const AUTH_TOKEN_KEY = 'dataroom_auth_token';
+export const AUTH_EXPIRED_EVENT = 'dataroom-auth-expired';
 
 interface ApiError {
   error: string;
@@ -17,9 +19,13 @@ interface ApiError {
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE}/api/v1${path}`;
   const headers: Record<string, string> = {};
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
 
   if (!(options.body instanceof FormData)) {
     headers['Content-Type'] = 'application/json';
+  }
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
   }
 
   const res = await fetch(url, {
@@ -28,6 +34,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   });
 
   if (!res.ok) {
+    if (res.status === 401) {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+    }
     const data: ApiError = await res
       .json()
       .catch(() => ({ error: `HTTP ${res.status}` }));
@@ -39,6 +49,31 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  // Auth
+  register: (email: string, password: string) =>
+    request<{ user: { id: string; email: string }; token: string }>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
+
+  login: (email: string, password: string) =>
+    request<{ user: { id: string; email: string }; token: string }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
+
+  me: () => request<{ id: string; email: string }>('/auth/me'),
+
+  setToken: (token: string) => {
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+  },
+
+  getToken: () => localStorage.getItem(AUTH_TOKEN_KEY),
+
+  clearToken: () => {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+  },
+
   // Datarooms
   createDataroom: (name: string, description?: string) =>
     request<Dataroom>('/datarooms', {
@@ -143,7 +178,9 @@ export const api = {
   getFile: (fileId: string) => request<FileItem>(`/files/${fileId}`),
 
   getFileContentUrl: (fileId: string) =>
-    `${API_BASE}/api/v1/files/${fileId}/content`,
+    `${API_BASE}/api/v1/files/${fileId}/content?token=${encodeURIComponent(
+      localStorage.getItem(AUTH_TOKEN_KEY) || ''
+    )}`,
 
   renameFile: (fileId: string, name: string) =>
     request<FileItem>(`/files/${fileId}`, {

@@ -1,6 +1,7 @@
 import io
 import os
 import shutil
+import uuid
 
 import pytest
 
@@ -42,9 +43,33 @@ def app():
 
 
 @pytest.fixture(scope='function')
-def client(app):
-    """Create test client."""
+def raw_client(app):
+    """Create unauthenticated test client."""
     return app.test_client()
+
+
+@pytest.fixture(scope='function')
+def make_authed_client(app):
+    """Create an authenticated client for a new user."""
+    def _make():
+        client = app.test_client()
+        email = f"user-{uuid.uuid4().hex[:8]}@example.com"
+        password = 'Secret123!'
+        resp = client.post(
+            '/api/v1/auth/register',
+            json={'email': email, 'password': password},
+        )
+        token = resp.get_json()['token']
+        client.environ_base['HTTP_AUTHORIZATION'] = f'Bearer {token}'
+        return client
+
+    return _make
+
+
+@pytest.fixture(scope='function')
+def client(make_authed_client):
+    """Create authenticated test client."""
+    return make_authed_client()
 
 
 @pytest.fixture(scope='function')

@@ -19,6 +19,7 @@ class DataroomSchema(Schema):
     id = fields.String()
     name = fields.String()
     description = fields.String(allow_none=True)
+    user_id = fields.String(allow_none=True)
     created_at = fields.String()
     updated_at = fields.String()
     deleted_at = fields.String(allow_none=True)
@@ -142,6 +143,28 @@ class StorageUsageSchema(Schema):
     quota_bytes = fields.Integer()
     remaining_bytes = fields.Integer()
     usage_percent = fields.Integer()
+
+
+class AuthRegisterSchema(Schema):
+    email = fields.Email(required=True)
+    password = fields.String(required=True)
+
+
+class AuthLoginSchema(Schema):
+    email = fields.Email(required=True)
+    password = fields.String(required=True)
+
+
+class UserSchema(Schema):
+    id = fields.String()
+    email = fields.Email()
+    created_at = fields.String()
+    updated_at = fields.String()
+
+
+class AuthResponseSchema(Schema):
+    user = fields.Nested(UserSchema)
+    token = fields.String()
 
 
 class HealthSchema(Schema):
