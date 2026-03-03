@@ -47,6 +47,16 @@ cd backend
 python -m pytest tests/ -v
 ```
 
+## Cloud Demo Deployment
+
+For a zero/low-cost demo setup with GitHub Actions deployments:
+- Frontend: GitHub Pages
+- Backend: Render
+- Database: Neon
+- File storage: Cloudflare R2
+
+See the full guide: [`docs/deployment/cloud-demo.md`](docs/deployment/cloud-demo.md)
+
 ## Design Decisions
 
 ### Architecture
@@ -61,7 +71,7 @@ python -m pytest tests/ -v
 - **Partial unique indexes** - Enforce name uniqueness only among active (non-deleted) items, scoped to the parent context. Allows recreating items with previously-used names after deletion.
 
 ### File Storage
-- **Flat disk storage with UUID filenames** - Files stored as `./storage/<uuid>.pdf`. No user input ever touches the filesystem path, eliminating path traversal by design. Easy to migrate to S3/GCS later by swapping the storage service layer.
+- **Storage abstraction (local or S3-compatible)** - Files are stored with UUID keys and can use local disk (`STORAGE_BACKEND=local`) or object storage (`STORAGE_BACKEND=s3`, e.g. Cloudflare R2). No user input ever touches the filesystem key/path.
 - **Triple PDF validation** - Extension check + Content-Type header + magic bytes (`%PDF`). Defense in depth against malicious uploads.
 - **50MB file size limit** - Configurable via environment variable. Checked before writing to disk.
 
@@ -115,7 +125,7 @@ Base URL: `/api/v1`
 | Layer | Technology |
 |-------|-----------|
 | Frontend | React 18, TypeScript, Vite, Tailwind CSS v4, shadcn/ui, react-pdf, lucide-react |
-| Backend | Flask 3.1, SQLAlchemy, Flask-Migrate, Gunicorn |
+| Backend | Flask 3.1, SQLAlchemy, Flask-Migrate, Gunicorn, boto3 |
 | Database | PostgreSQL 15 |
 | Testing | Pytest (20 tests) |
 | Containerization | Docker, Docker Compose |
