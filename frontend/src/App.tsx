@@ -145,19 +145,33 @@ export default function App() {
     [navigate, currentDataroomId]
   );
 
+  const handleLogout = useCallback(() => {
+    api.clearToken();
+    setIsAuthed(false);
+    setCurrentView('list');
+    setCurrentDataroomId(null);
+    setCurrentFolderId(null);
+    window.location.hash = '#/';
+    toast.success('Logged out');
+  }, []);
+
   const handleAuthSubmit = useCallback(
     async (e: FormEvent) => {
       e.preventDefault();
       setAuthSubmitting(true);
       try {
         const trimmedEmail = email.trim().toLowerCase();
-        const res =
-          authMode === 'register'
-            ? await api.register(trimmedEmail, password)
-            : await api.login(trimmedEmail, password);
-        api.setToken(res.token);
-        setIsAuthed(true);
-        toast.success(authMode === 'register' ? 'Account created' : 'Signed in');
+        if (authMode === 'register') {
+          await api.register(trimmedEmail, password);
+          setAuthMode('login');
+          setPassword('');
+          toast.success('Account created. Please sign in.');
+        } else {
+          const res = await api.login(trimmedEmail, password);
+          api.setToken(res.token);
+          setIsAuthed(true);
+          toast.success('Signed in');
+        }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Authentication failed');
       } finally {
@@ -238,13 +252,14 @@ export default function App() {
   return (
     <>
       {currentView === 'list' ? (
-        <DataroomList onSelect={handleSelectDataroom} />
+        <DataroomList onSelect={handleSelectDataroom} onLogout={handleLogout} />
       ) : currentDataroomId ? (
         <DataroomDetail
           dataroomId={currentDataroomId}
           folderId={currentFolderId}
           onBack={handleBack}
           onNavigate={handleNavigateFolder}
+          onLogout={handleLogout}
         />
       ) : null}
       <Toaster richColors position="bottom-right" />

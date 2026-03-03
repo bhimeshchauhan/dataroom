@@ -11,9 +11,10 @@ import type { Dataroom, StorageUsage } from '@/types';
 
 interface DataroomListProps {
   onSelect: (dataroomId: string) => void;
+  onLogout: () => void;
 }
 
-export function DataroomList({ onSelect }: DataroomListProps) {
+export function DataroomList({ onSelect, onLogout }: DataroomListProps) {
   const [datarooms, setDatarooms] = useState<Dataroom[]>([]);
   const [storageUsage, setStorageUsage] = useState<StorageUsage | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,10 +53,15 @@ export function DataroomList({ onSelect }: DataroomListProps) {
                 Organize folders and PDFs
               </p>
             </div>
-            <Button onClick={() => setCreateOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              New Data Room
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={onLogout}>
+                Logout
+              </Button>
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                New Data Room
+              </Button>
+            </div>
           </div>
         </div>
       </div>

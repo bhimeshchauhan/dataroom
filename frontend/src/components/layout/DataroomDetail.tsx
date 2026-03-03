@@ -13,6 +13,7 @@ interface DataroomDetailProps {
   folderId: string | null;
   onBack: () => void;
   onNavigate: (folderId: string | null) => void;
+  onLogout: () => void;
 }
 
 export function DataroomDetail({
@@ -20,6 +21,7 @@ export function DataroomDetail({
   folderId,
   onBack,
   onNavigate,
+  onLogout,
 }: DataroomDetailProps) {
   const [dataroom, setDataroom] = useState<Dataroom | null>(null);
   const [tree, setTree] = useState<TreeNode[]>([]);
@@ -162,6 +164,9 @@ export function DataroomDetail({
           onClick={() => setSidebarOpen(!sidebarOpen)}
         >
           {sidebarOpen ? 'Hide folders' : 'Show folders'}
+        </Button>
+        <Button variant="outline" size="sm" onClick={onLogout}>
+          Logout
         </Button>
       </div>
 
