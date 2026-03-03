@@ -51,7 +51,6 @@ class File(db.Model):
             'name': self.name,
             'mime_type': self.mime_type,
             'size_bytes': self.size_bytes,
-            'storage_path': self.storage_path,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'deleted_at': self.deleted_at.isoformat() if self.deleted_at else None,

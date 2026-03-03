@@ -1,3 +1,4 @@
+import io
 import json
 
 
@@ -221,3 +222,81 @@ def test_dataroom_tree(client):
     assert tree[0]['name'] == 'Root Folder'
     assert len(tree[0]['children']) == 1
     assert tree[0]['children'][0]['name'] == 'Sub Folder'
+
+
+def test_contents_combined_pagination_limit(client, sample_pdf):
+    """Each page returns at most per_page items across folders+files combined."""
+    dataroom_id = _create_dataroom(client)
+    parent_resp = client.post(
+        f'/api/v1/datarooms/{dataroom_id}/folders',
+        data=json.dumps({'name': 'Parent'}),
+        content_type='application/json',
+    )
+    parent_id = parent_resp.get_json()['id']
+
+    for i in range(2):
+        client.post(
+            f'/api/v1/datarooms/{dataroom_id}/folders',
+            data=json.dumps({'name': f'Folder {i}', 'parent_id': parent_id}),
+            content_type='application/json',
+        )
+
+    for i in range(2):
+        client.post(
+            f'/api/v1/datarooms/{dataroom_id}/files',
+            data={'file': (io.BytesIO(sample_pdf), f'file-{i}.pdf', 'application/pdf'),
+                  'folder_id': parent_id},
+            content_type='multipart/form-data',
+        )
+
+    resp = client.get(f'/api/v1/folders/{parent_id}/contents?per_page=2&page=1')
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert len(data['folders']) + len(data['files']) == 2
+    assert data['pagination']['total_items'] == 4
+    assert data['pagination']['pages'] == 2
+
+
+def test_contents_search_filters_folders_and_files(client, sample_pdf):
+    """Search query filters folder/file names in current container."""
+    dataroom_id = _create_dataroom(client)
+    parent_resp = client.post(
+        f'/api/v1/datarooms/{dataroom_id}/folders',
+        data=json.dumps({'name': 'Parent'}),
+        content_type='application/json',
+    )
+    parent_id = parent_resp.get_json()['id']
+
+    client.post(
+        f'/api/v1/datarooms/{dataroom_id}/folders',
+        data=json.dumps({'name': 'Alpha Folder', 'parent_id': parent_id}),
+        content_type='application/json',
+    )
+    client.post(
+        f'/api/v1/datarooms/{dataroom_id}/folders',
+        data=json.dumps({'name': 'Beta Folder', 'parent_id': parent_id}),
+        content_type='application/json',
+    )
+
+    client.post(
+        f'/api/v1/datarooms/{dataroom_id}/files',
+        data={'file': (io.BytesIO(sample_pdf), 'alpha-document.pdf', 'application/pdf'),
+              'folder_id': parent_id},
+        content_type='multipart/form-data',
+    )
+    client.post(
+        f'/api/v1/datarooms/{dataroom_id}/files',
+        data={'file': (io.BytesIO(sample_pdf), 'other.pdf', 'application/pdf'),
+              'folder_id': parent_id},
+        content_type='multipart/form-data',
+    )
+
+    response = client.get(
+        f'/api/v1/folders/{parent_id}/contents?search=alpha',
+    )
+    assert response.status_code == 200
+    data = response.get_json()
+    assert len(data['folders']) == 1
+    assert data['folders'][0]['name'] == 'Alpha Folder'
+    assert len(data['files']) == 1
+    assert data['files'][0]['name'] == 'alpha-document.pdf'

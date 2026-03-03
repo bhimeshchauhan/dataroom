@@ -6,7 +6,7 @@ import { ContentPanel } from './ContentPanel';
 import { PdfViewerModal } from '@/components/files/PdfViewerModal';
 import { api } from '@/api/client';
 import { toast } from 'sonner';
-import type { Dataroom, ContentsResponse, TreeNode } from '@/types';
+import type { Dataroom, ContentsResponse, TreeNode, StorageUsage } from '@/types';
 
 interface DataroomDetailProps {
   dataroomId: string;
@@ -24,6 +24,7 @@ export function DataroomDetail({
   const [dataroom, setDataroom] = useState<Dataroom | null>(null);
   const [tree, setTree] = useState<TreeNode[]>([]);
   const [contents, setContents] = useState<ContentsResponse | null>(null);
+  const [storageUsage, setStorageUsage] = useState<StorageUsage | null>(null);
   const [loadingDataroom, setLoadingDataroom] = useState(true);
   const [loadingContents, setLoadingContents] = useState(true);
   const [viewingFile, setViewingFile] = useState<{
@@ -32,11 +33,17 @@ export function DataroomDetail({
   } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Reset page when navigating to a different folder
   useEffect(() => {
     setPage(1);
   }, [folderId]);
+
+  // Reset search when changing dataroom
+  useEffect(() => {
+    setSearchQuery('');
+  }, [dataroomId]);
 
   // Fetch dataroom info
   useEffect(() => {
@@ -50,7 +57,7 @@ export function DataroomDetail({
       .catch((err) => {
         if (!cancelled)
           toast.error(
-            err instanceof Error ? err.message : 'Failed to load data room'
+            err instanceof Error ? err.message : 'Could not load data room.'
           );
       })
       .finally(() => {
@@ -68,7 +75,7 @@ export function DataroomDetail({
       setTree(res.tree);
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : 'Failed to load folder tree'
+        err instanceof Error ? err.message : 'Could not load folder tree.'
       );
     }
   }, [dataroomId]);
@@ -77,25 +84,40 @@ export function DataroomDetail({
     fetchTree();
   }, [fetchTree]);
 
+  const fetchStorageUsage = useCallback(async () => {
+    try {
+      const usage = await api.getStorageUsage();
+      setStorageUsage(usage);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Could not load storage usage.'
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStorageUsage();
+  }, [fetchStorageUsage]);
+
   // Fetch contents
   const fetchContents = useCallback(async () => {
     setLoadingContents(true);
     try {
       let res: ContentsResponse;
       if (folderId) {
-        res = await api.getFolderContents(folderId, 'name', 'asc', page);
+        res = await api.getFolderContents(folderId, 'name', 'asc', page, 20, searchQuery);
       } else {
-        res = await api.getDataroomContents(dataroomId, 'name', 'asc', page);
+        res = await api.getDataroomContents(dataroomId, 'name', 'asc', page, 20, searchQuery);
       }
       setContents(res);
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : 'Failed to load contents'
+        err instanceof Error ? err.message : 'Could not load contents.'
       );
     } finally {
       setLoadingContents(false);
     }
-  }, [dataroomId, folderId, page]);
+  }, [dataroomId, folderId, page, searchQuery]);
 
   useEffect(() => {
     fetchContents();
@@ -104,7 +126,8 @@ export function DataroomDetail({
   const handleRefresh = useCallback(() => {
     fetchContents();
     fetchTree();
-  }, [fetchContents, fetchTree]);
+    fetchStorageUsage();
+  }, [fetchContents, fetchTree, fetchStorageUsage]);
 
   if (loadingDataroom && !dataroom) {
     return (
@@ -159,6 +182,7 @@ export function DataroomDetail({
         {/* Content */}
         <ContentPanel
           contents={contents}
+          storageUsage={storageUsage}
           dataroomId={dataroomId}
           folderId={folderId}
           onNavigate={onNavigate}
@@ -169,6 +193,11 @@ export function DataroomDetail({
           loading={loadingContents}
           page={page}
           onPageChange={setPage}
+          searchQuery={searchQuery}
+          onSearchChange={(query) => {
+            setPage(1);
+            setSearchQuery(query);
+          }}
         />
       </div>
 

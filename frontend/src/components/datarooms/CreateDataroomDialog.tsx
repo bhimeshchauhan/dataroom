@@ -35,14 +35,14 @@ export function CreateDataroomDialog({
     setLoading(true);
     try {
       await api.createDataroom(name.trim(), description.trim() || undefined);
-      toast.success('Data room created');
+      toast.success('Data room created.');
       setName('');
       setDescription('');
       onCreated();
       onClose();
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : 'Failed to create data room'
+        err instanceof Error ? err.message : 'Could not create data room.'
       );
     } finally {
       setLoading(false);
@@ -64,7 +64,7 @@ export function CreateDataroomDialog({
           <DialogHeader>
             <DialogTitle>New Data Room</DialogTitle>
             <DialogDescription>
-              Create a new data room to organize and share your documents.
+              Add a top-level workspace for related files.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">

@@ -47,13 +47,14 @@ export function DeleteDialog({
         <DialogHeader>
           <DialogTitle>Delete {typeLabel}</DialogTitle>
           <DialogDescription>
-            This will permanently delete{' '}
+            Move{' '}
             <span className="font-semibold text-foreground">{itemName}</span>
             {itemType === 'folder'
-              ? ' and all its contents.'
+              ? ' and all of its contents to trash.'
               : itemType === 'dataroom'
-                ? ' and all its folders and files.'
-                : '.'}
+                ? ' and everything inside it to trash.'
+                : ' to trash.'}
+            {' '}You can restore it later.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2 sm:gap-0">

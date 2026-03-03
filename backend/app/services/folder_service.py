@@ -11,9 +11,10 @@ from app.utils.validation import validate_folder_name
 class FolderService:
 
     @staticmethod
-    def _get_active_dataroom(dataroom_id):
+    def _get_active_dataroom(dataroom_id, client_ip=None):
         dataroom = Dataroom.query.filter(
             Dataroom.id == str(dataroom_id),
+            Dataroom.created_by_ip == client_ip,
             Dataroom.deleted_at.is_(None),
         ).first()
         if not dataroom:
@@ -21,9 +22,9 @@ class FolderService:
         return dataroom
 
     @staticmethod
-    def create(dataroom_id, name, parent_id=None):
+    def create(dataroom_id, name, parent_id=None, client_ip=None):
         name = validate_folder_name(name)
-        FolderService._get_active_dataroom(dataroom_id)
+        FolderService._get_active_dataroom(dataroom_id, client_ip=client_ip)
 
         parent = None
         if parent_id:
@@ -67,25 +68,29 @@ class FolderService:
         return folder
 
     @staticmethod
-    def get(folder_id):
-        folder = Folder.query.filter(
+    def get(folder_id, client_ip=None):
+        folder = Folder.query.join(
+            Dataroom, Folder.dataroom_id == Dataroom.id
+        ).filter(
             Folder.id == str(folder_id),
             Folder.deleted_at.is_(None),
+            Dataroom.created_by_ip == client_ip,
+            Dataroom.deleted_at.is_(None),
         ).first()
         if not folder:
             raise NotFoundError(f'Folder {folder_id} not found')
         return folder
 
     @staticmethod
-    def get_contents(folder_id=None, dataroom_id=None, page=1, per_page=20,
-                     sort_by='name', sort_order='asc'):
+    def get_contents(folder_id=None, dataroom_id=None, client_ip=None, page=1, per_page=20,
+                     sort_by='name', sort_order='asc', search_query=None):
         current_folder = None
         breadcrumbs = []
 
         if folder_id:
-            current_folder = FolderService.get(folder_id)
+            current_folder = FolderService.get(folder_id, client_ip=client_ip)
             dataroom_id = current_folder.dataroom_id
-            breadcrumbs = FolderService._build_breadcrumbs(current_folder)
+            breadcrumbs = FolderService._build_breadcrumbs(current_folder, client_ip=client_ip)
             folder_query = Folder.query.filter(
                 Folder.parent_id == str(folder_id),
                 Folder.deleted_at.is_(None),
@@ -95,7 +100,7 @@ class FolderService:
                 File.deleted_at.is_(None),
             )
         elif dataroom_id:
-            FolderService._get_active_dataroom(dataroom_id)
+            FolderService._get_active_dataroom(dataroom_id, client_ip=client_ip)
             folder_query = Folder.query.filter(
                 Folder.dataroom_id == str(dataroom_id),
                 Folder.parent_id.is_(None),
@@ -109,6 +114,11 @@ class FolderService:
         else:
             raise NotFoundError('Either folder_id or dataroom_id is required')
 
+        if search_query:
+            search_like = f'%{search_query}%'
+            folder_query = folder_query.filter(Folder.name.ilike(search_like))
+            file_query = file_query.filter(File.name.ilike(search_like))
+
         # Apply sorting
         folder_sort_col = getattr(Folder, sort_by, Folder.name)
         file_sort_col = getattr(File, sort_by, File.name)
@@ -120,28 +130,53 @@ class FolderService:
             folder_query = folder_query.order_by(folder_sort_col.asc())
             file_query = file_query.order_by(file_sort_col.asc())
 
-        folders_pagination = folder_query.paginate(
-            page=page, per_page=per_page, error_out=False,
+        folders = folder_query.all()
+        files = file_query.all()
+
+        def _sort_value(item):
+            value = getattr(item, sort_by, None)
+            if isinstance(value, str):
+                return value.lower()
+            return value
+
+        combined = [('folder', f) for f in folders] + [('file', f) for f in files]
+        combined.sort(
+            key=lambda item: (
+                _sort_value(item[1]) is None,
+                _sort_value(item[1]),
+                0 if item[0] == 'folder' else 1,
+            ),
+            reverse=(sort_order == 'desc'),
         )
-        files_pagination = file_query.paginate(
-            page=page, per_page=per_page, error_out=False,
-        )
+
+        total_folders = len(folders)
+        total_files = len(files)
+        total_items = len(combined)
+        pages = max((total_items + per_page - 1) // per_page, 1)
+        start = (page - 1) * per_page
+        end = start + per_page
+        page_items = combined[start:end]
+
+        paged_folders = [item[1].to_dict() for item in page_items if item[0] == 'folder']
+        paged_files = [item[1].to_dict() for item in page_items if item[0] == 'file']
 
         return {
             'folder': current_folder.to_dict() if current_folder else None,
             'breadcrumbs': breadcrumbs,
-            'folders': [f.to_dict() for f in folders_pagination.items],
-            'files': [f.to_dict() for f in files_pagination.items],
+            'folders': paged_folders,
+            'files': paged_files,
             'pagination': {
-                'total_folders': folders_pagination.total,
-                'total_files': files_pagination.total,
+                'total_folders': total_folders,
+                'total_files': total_files,
+                'total_items': total_items,
                 'page': page,
                 'per_page': per_page,
+                'pages': pages,
             },
         }
 
     @staticmethod
-    def _build_breadcrumbs(folder):
+    def _build_breadcrumbs(folder, client_ip=None):
         """Build breadcrumbs from materialized path."""
         if not folder or not folder.path:
             return []
@@ -151,8 +186,12 @@ class FolderService:
         if not parts:
             return []
 
-        ancestors = Folder.query.filter(
+        ancestors = Folder.query.join(
+            Dataroom, Folder.dataroom_id == Dataroom.id
+        ).filter(
             Folder.id.in_(parts),
+            Dataroom.created_by_ip == client_ip,
+            Dataroom.deleted_at.is_(None),
         ).all()
 
         # Sort them in path order
@@ -168,9 +207,9 @@ class FolderService:
         return breadcrumbs
 
     @staticmethod
-    def rename(folder_id, name):
+    def rename(folder_id, name, client_ip=None):
         name = validate_folder_name(name)
-        folder = FolderService.get(folder_id)
+        folder = FolderService.get(folder_id, client_ip=client_ip)
 
         # Check uniqueness in same parent
         uniqueness_query = Folder.query.filter(
@@ -195,8 +234,8 @@ class FolderService:
         return folder
 
     @staticmethod
-    def delete(folder_id):
-        folder = FolderService.get(folder_id)
+    def delete(folder_id, client_ip=None):
+        folder = FolderService.get(folder_id, client_ip=client_ip)
         now = datetime.now(timezone.utc)
 
         # Find all descendant folders via materialized path
@@ -222,8 +261,8 @@ class FolderService:
         db.session.commit()
 
     @staticmethod
-    def get_tree(dataroom_id):
-        FolderService._get_active_dataroom(dataroom_id)
+    def get_tree(dataroom_id, client_ip=None):
+        FolderService._get_active_dataroom(dataroom_id, client_ip=client_ip)
 
         folders = Folder.query.filter(
             Folder.dataroom_id == str(dataroom_id),

@@ -28,10 +28,10 @@ export function DataroomCard({ dataroom, onClick, onRefresh }: DataroomCardProps
   const handleRename = async (newName: string) => {
     try {
       await api.updateDataroom(dataroom.id, { name: newName });
-      toast.success('Renamed successfully');
+      toast.success('Data room renamed.');
       onRefresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to rename');
+      toast.error(err instanceof Error ? err.message : 'Could not rename data room.');
       throw err;
     }
   };
@@ -39,10 +39,10 @@ export function DataroomCard({ dataroom, onClick, onRefresh }: DataroomCardProps
   const handleDelete = async () => {
     try {
       await api.deleteDataroom(dataroom.id);
-      toast.success('Deleted successfully');
+      toast.success('Data room moved to trash.');
       onRefresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete');
+      toast.error(err instanceof Error ? err.message : 'Could not remove data room.');
       throw err;
     }
   };

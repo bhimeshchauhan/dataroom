@@ -34,8 +34,10 @@ class PaginationSchema(Schema):
 class ContentsPaginationSchema(Schema):
     total_folders = fields.Integer()
     total_files = fields.Integer()
+    total_items = fields.Integer()
     page = fields.Integer()
     per_page = fields.Integer()
+    pages = fields.Integer()
 
 
 class DataroomListSchema(Schema):
@@ -70,7 +72,6 @@ class FileSchema(Schema):
     name = fields.String()
     mime_type = fields.String()
     size_bytes = fields.Integer()
-    storage_path = fields.String()
     created_at = fields.String()
     updated_at = fields.String()
     deleted_at = fields.String(allow_none=True)
@@ -127,9 +128,21 @@ class ContentQuerySchema(Schema):
     per_page = fields.Integer(load_default=20)
     sort_by = fields.String(load_default='name')
     sort_order = fields.String(load_default='asc')
+    search = fields.String(load_default=None)
 
 
 # ── Error ─────────────────────────────────────────────────────────────────────
 
 class AppErrorSchema(Schema):
     error = fields.String()
+
+
+class StorageUsageSchema(Schema):
+    used_bytes = fields.Integer()
+    quota_bytes = fields.Integer()
+    remaining_bytes = fields.Integer()
+    usage_percent = fields.Integer()
+
+
+class HealthSchema(Schema):
+    status = fields.String()

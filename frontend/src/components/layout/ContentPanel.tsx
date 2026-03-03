@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import {
   DropdownMenu,
@@ -27,10 +28,16 @@ import { DeleteDialog } from '@/components/dialogs/DeleteDialog';
 import { api } from '@/api/client';
 import { toast } from 'sonner';
 import { formatFileSize, formatRelativeDate } from '@/lib/format';
-import type { ContentsResponse, Folder as FolderType, FileItem } from '@/types';
+import type {
+  ContentsResponse,
+  Folder as FolderType,
+  FileItem,
+  StorageUsage,
+} from '@/types';
 
 interface ContentPanelProps {
   contents: ContentsResponse | null;
+  storageUsage: StorageUsage | null;
   dataroomId: string;
   folderId: string | null;
   onNavigate: (folderId: string | null) => void;
@@ -39,10 +46,13 @@ interface ContentPanelProps {
   loading: boolean;
   page: number;
   onPageChange: (page: number) => void;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
 }
 
 export function ContentPanel({
   contents,
+  storageUsage,
   dataroomId,
   folderId,
   onNavigate,
@@ -51,6 +61,8 @@ export function ContentPanel({
   loading,
   page,
   onPageChange,
+  searchQuery,
+  onSearchChange,
 }: ContentPanelProps) {
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
 
@@ -72,10 +84,10 @@ export function ContentPanel({
     if (!renameTarget) return;
     try {
       await api.renameFolder(renameTarget.id, newName);
-      toast.success('Renamed successfully');
+      toast.success('Folder renamed.');
       onRefresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to rename');
+      toast.error(err instanceof Error ? err.message : 'Could not rename folder.');
       throw err;
     }
   };
@@ -84,10 +96,10 @@ export function ContentPanel({
     if (!renameTarget) return;
     try {
       await api.renameFile(renameTarget.id, newName);
-      toast.success('Renamed successfully');
+      toast.success('File renamed.');
       onRefresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to rename');
+      toast.error(err instanceof Error ? err.message : 'Could not rename file.');
       throw err;
     }
   };
@@ -96,10 +108,10 @@ export function ContentPanel({
     if (!deleteTarget) return;
     try {
       await api.deleteFolder(deleteTarget.id);
-      toast.success('Deleted successfully');
+      toast.success('Folder moved to trash.');
       onRefresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete');
+      toast.error(err instanceof Error ? err.message : 'Could not remove folder.');
       throw err;
     }
   };
@@ -108,10 +120,10 @@ export function ContentPanel({
     if (!deleteTarget) return;
     try {
       await api.deleteFile(deleteTarget.id);
-      toast.success('Deleted successfully');
+      toast.success('File moved to trash.');
       onRefresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete');
+      toast.error(err instanceof Error ? err.message : 'Could not remove file.');
       throw err;
     }
   };
@@ -134,6 +146,12 @@ export function ContentPanel({
 
         {/* Action bar */}
         <div className="flex items-center gap-2 mt-4">
+          <Input
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Search by name..."
+            className="max-w-sm"
+          />
           <Button
             variant="outline"
             size="sm"
@@ -160,6 +178,24 @@ export function ContentPanel({
 
         <Separator className="my-4" />
 
+        {storageUsage && (
+          <div className="rounded-lg border bg-muted/30 p-3 mb-4">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Storage usage</span>
+              <span>
+                {formatFileSize(storageUsage.used_bytes)} /{' '}
+                {formatFileSize(storageUsage.quota_bytes)}
+              </span>
+            </div>
+            <div className="mt-2 h-2 w-full rounded-full bg-muted">
+              <div
+                className="h-2 rounded-full bg-primary transition-all"
+                style={{ width: `${Math.min(storageUsage.usage_percent, 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Loading state */}
         {loading && (
           <div className="space-y-2">
@@ -182,10 +218,12 @@ export function ContentPanel({
               <FolderOpen className="h-7 w-7 text-muted-foreground" />
             </div>
             <h3 className="mt-4 text-base font-semibold">
-              This folder is empty
+              {searchQuery ? 'No matches found' : 'This folder is empty'}
             </h3>
             <p className="mt-1 text-sm text-muted-foreground text-center max-w-xs">
-              Create a folder or upload a PDF to get started.
+              {searchQuery
+                ? 'Try a different search term.'
+                : 'Create a folder or upload a PDF.'}
             </p>
           </div>
         )}
@@ -253,14 +291,13 @@ export function ContentPanel({
         {/* Pagination */}
         {!loading && contents && contents.pagination && (() => {
           const p = contents.pagination;
-          const totalFolders = p.total_folders ?? 0;
-          const totalFiles = p.total_files ?? p.total ?? 0;
-          const perPage = p.per_page;
-          const maxPages = Math.max(
-            Math.ceil(totalFolders / perPage),
-            Math.ceil(totalFiles / perPage),
-            1
-          );
+          const maxPages =
+            p.pages ??
+            Math.max(
+              Math.ceil((p.total_folders ?? 0) / p.per_page),
+              Math.ceil((p.total_files ?? p.total ?? 0) / p.per_page),
+              1
+            );
           if (maxPages <= 1) return null;
           return (
             <div className="flex items-center justify-between mt-6 pt-4 border-t">

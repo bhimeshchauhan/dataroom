@@ -1,4 +1,4 @@
-# Cloud Demo Deployment (GitHub Pages + Render + Neon + R2)
+# Cloud Demo Deployment (GitHub Pages + Render + Neon)
 
 This setup uses free tiers and supports backend cold starts.
 
@@ -6,31 +6,25 @@ This setup uses free tiers and supports backend cold starts.
 - Frontend: GitHub Pages (`https://bhimeshchauhan.github.io/dataroom/`)
 - Backend API: Render Free Web Service
 - Postgres: Neon
-- PDF storage: Cloudflare R2 (S3-compatible)
+- PDF storage: Render Persistent Disk (`/var/data/storage`)
 
 ## 1) Create services
 
 1. Create a Neon project and copy the pooled connection string.
-2. Create an R2 bucket and generate API token keys.
-3. Create a Render Web Service for `backend/`.
-4. Ensure your personal site repo exists: `bhimeshchauhan/bhimeshchauhan.github.io`.
+2. Create a Render Web Service for `backend/`.
+3. Ensure your personal site repo exists: `bhimeshchauhan/bhimeshchauhan.github.io`.
+4. In Render, attach a Persistent Disk to the backend service and mount it at `/var/data`.
 
 ## 2) Configure backend (Render) environment variables
 
 Required:
 - `DATABASE_URL` = Neon postgres connection string
 - `CORS_ORIGINS` = frontend URL, e.g. `https://bhimeshchauhan.github.io`
-- `MAX_FILE_SIZE` = `52428800` (optional; default 50MB)
-- `STORAGE_BACKEND` = `s3`
-- `S3_BUCKET` = your R2 bucket name
-- `S3_REGION` = `auto`
-- `S3_ENDPOINT_URL` = `https://<accountid>.r2.cloudflarestorage.com`
-- `S3_ACCESS_KEY_ID` = R2 key id
-- `S3_SECRET_ACCESS_KEY` = R2 secret
-- `S3_KEY_PREFIX` = `dataroom` (optional)
-
-Optional for local/dev fallback only:
-- `STORAGE_PATH` (used only when `STORAGE_BACKEND=local`)
+- `TRUST_PROXY_HEADERS` = `true` (required on Render so client IP can be read from proxy headers)
+- `MAX_FILE_SIZE` = `26214400` (optional; default 25MB)
+- `FREE_STORAGE_QUOTA_BYTES` = `838860800` (optional; default 800MB per IP)
+- `STORAGE_BACKEND` = `local`
+- `STORAGE_PATH` = `/var/data/storage`
 
 ## 3) Configure frontend (GitHub Actions) secrets
 
@@ -64,4 +58,23 @@ How they are used:
 
 ## Notes
 - Render free services may sleep and take time to wake up.
+- Persistent Disk storage survives deploys/restarts for uploaded files.
 - Keep credentials only in platform/GitHub secrets, never committed.
+
+## Optional: Switch to Cloudflare R2 Later
+
+If you later want persistent object storage:
+- Set `STORAGE_BACKEND=s3`
+- Add: `S3_BUCKET`, `S3_REGION=auto`, `S3_ENDPOINT_URL`,
+  `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, optional `S3_KEY_PREFIX`
+
+## Optional: Switch to Backblaze B2 (S3-Compatible)
+
+Set:
+- `STORAGE_BACKEND=s3`
+- `S3_BUCKET=<bucket-name>`
+- `S3_REGION=<b2-region>` (for example `us-east-005`)
+- `S3_ENDPOINT_URL=https://s3.<b2-region>.backblazeb2.com`
+- `S3_ACCESS_KEY_ID=<application-key-id>`
+- `S3_SECRET_ACCESS_KEY=<application-key>`
+- `S3_KEY_PREFIX=dataroom` (optional)

@@ -43,8 +43,10 @@ export interface ContentsResponse {
 export interface Pagination {
   page: number;
   per_page: number;
+  pages?: number;
   total_folders?: number;
   total_files?: number;
+  total_items?: number;
   total?: number;
 }
 
@@ -52,4 +54,11 @@ export interface TreeNode {
   id: string;
   name: string;
   children: TreeNode[];
+}
+
+export interface StorageUsage {
+  used_bytes: number;
+  quota_bytes: number;
+  remaining_bytes: number;
+  usage_percent: number;
 }

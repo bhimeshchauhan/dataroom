@@ -14,6 +14,7 @@ class Dataroom(db.Model):
     )
     name = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text, nullable=True)
+    created_by_ip = db.Column(db.String(64), nullable=True, index=True)
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
@@ -35,6 +36,7 @@ class Dataroom(db.Model):
             'id': self.id,
             'name': self.name,
             'description': self.description,
+            'created_by_ip': self.created_by_ip,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'deleted_at': self.deleted_at.isoformat() if self.deleted_at else None,

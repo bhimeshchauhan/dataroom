@@ -11,24 +11,26 @@ from app.utils.validation import validate_name
 class DataroomService:
 
     @staticmethod
-    def create(name, description=None):
+    def create(name, description=None, client_ip=None):
         name = validate_name(name)
 
         existing = Dataroom.query.filter(
             Dataroom.name == name,
+            Dataroom.created_by_ip == client_ip,
             Dataroom.deleted_at.is_(None),
         ).first()
         if existing:
             raise ConflictError(f'A dataroom named "{name}" already exists')
 
-        dataroom = Dataroom(name=name, description=description)
+        dataroom = Dataroom(name=name, description=description, created_by_ip=client_ip)
         db.session.add(dataroom)
         db.session.commit()
         return dataroom
 
     @staticmethod
-    def list_all(page=1, per_page=20):
+    def list_all(page=1, per_page=20, client_ip=None):
         query = Dataroom.query.filter(
+            Dataroom.created_by_ip == client_ip,
             Dataroom.deleted_at.is_(None),
         ).order_by(Dataroom.updated_at.desc())
 
@@ -44,9 +46,10 @@ class DataroomService:
         }
 
     @staticmethod
-    def get(dataroom_id):
+    def get(dataroom_id, client_ip=None):
         dataroom = Dataroom.query.filter(
             Dataroom.id == str(dataroom_id),
+            Dataroom.created_by_ip == client_ip,
             Dataroom.deleted_at.is_(None),
         ).first()
         if not dataroom:
@@ -54,13 +57,14 @@ class DataroomService:
         return dataroom
 
     @staticmethod
-    def update(dataroom_id, name=None, description=None):
-        dataroom = DataroomService.get(dataroom_id)
+    def update(dataroom_id, name=None, description=None, client_ip=None):
+        dataroom = DataroomService.get(dataroom_id, client_ip=client_ip)
 
         if name is not None:
             name = validate_name(name)
             existing = Dataroom.query.filter(
                 Dataroom.name == name,
+                Dataroom.created_by_ip == client_ip,
                 Dataroom.deleted_at.is_(None),
                 Dataroom.id != str(dataroom_id),
             ).first()
@@ -76,8 +80,8 @@ class DataroomService:
         return dataroom
 
     @staticmethod
-    def delete(dataroom_id):
-        dataroom = DataroomService.get(dataroom_id)
+    def delete(dataroom_id, client_ip=None):
+        dataroom = DataroomService.get(dataroom_id, client_ip=client_ip)
         now = datetime.now(timezone.utc)
 
         dataroom.deleted_at = now

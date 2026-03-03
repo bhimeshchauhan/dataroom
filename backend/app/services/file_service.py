@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime, timezone
 
 from flask import current_app
+from sqlalchemy import func
 from werkzeug.utils import secure_filename
 
 from app.models import db
@@ -16,21 +17,24 @@ from app.utils.errors import NotFoundError, ConflictError, ValidationError
 class FileService:
 
     @staticmethod
+    def _format_size(num_bytes):
+        mb = num_bytes / (1024 * 1024)
+        if mb >= 1024:
+            return f'{mb / 1024:.1f} GB'
+        return f'{mb:.1f} MB'
+
+    @staticmethod
     def validate_upload(file):
-        """Validate an uploaded file. Returns file size on success."""
-        # 1. File present with filename
+        """Validate uploaded PDF and return byte size."""
         if not file or not file.filename:
             raise ValidationError('No file provided')
 
-        # 2. Extension is .pdf
         if not file.filename.lower().endswith('.pdf'):
             raise ValidationError('Only PDF files are allowed')
 
-        # 3. Content-Type is application/pdf
         if file.content_type != 'application/pdf':
             raise ValidationError('File must have application/pdf content type')
 
-        # 4. File size check
         file.seek(0, os.SEEK_END)
         size = file.tell()
         file.seek(0)
@@ -40,9 +44,10 @@ class FileService:
 
         max_size = current_app.config.get('MAX_CONTENT_LENGTH', 50 * 1024 * 1024)
         if size > max_size:
-            raise ValidationError(f'File size exceeds maximum of {max_size} bytes')
+            raise ValidationError(
+                f'File size exceeds maximum of {FileService._format_size(max_size)}',
+            )
 
-        # 5. Magic bytes check
         header = file.read(4)
         file.seek(0)
 
@@ -52,10 +57,11 @@ class FileService:
         return size
 
     @staticmethod
-    def upload(dataroom_id, file, folder_id=None):
+    def upload(dataroom_id, file, folder_id=None, client_ip=None):
         # Verify dataroom exists
         dataroom = Dataroom.query.filter(
             Dataroom.id == str(dataroom_id),
+            Dataroom.created_by_ip == client_ip,
             Dataroom.deleted_at.is_(None),
         ).first()
         if not dataroom:
@@ -73,6 +79,7 @@ class FileService:
 
         # Validate file
         size = FileService.validate_upload(file)
+        FileService.ensure_within_quota(client_ip=client_ip, incoming_size=size)
 
         # Sanitize filename
         original_name = secure_filename(file.filename)
@@ -129,35 +136,63 @@ class FileService:
         return file_record
 
     @staticmethod
-    def get(file_id):
-        file_record = File.query.filter(
+    def get_usage(client_ip=None):
+        used_bytes = (
+            db.session.query(func.coalesce(func.sum(File.size_bytes), 0))
+            .join(Dataroom, File.dataroom_id == Dataroom.id)
+            .filter(
+                Dataroom.created_by_ip == client_ip,
+                Dataroom.deleted_at.is_(None),
+                File.deleted_at.is_(None),
+            )
+            .scalar()
+        )
+        quota_bytes = current_app.config.get(
+            'FREE_STORAGE_QUOTA_BYTES',
+            800 * 1024 * 1024,
+        )
+        remaining = max(quota_bytes - int(used_bytes), 0)
+        usage_percent = int((int(used_bytes) / quota_bytes) * 100) if quota_bytes else 0
+        return {
+            'used_bytes': int(used_bytes),
+            'quota_bytes': int(quota_bytes),
+            'remaining_bytes': int(remaining),
+            'usage_percent': min(max(usage_percent, 0), 100),
+        }
+
+    @staticmethod
+    def ensure_within_quota(client_ip=None, incoming_size=0):
+        usage = FileService.get_usage(client_ip=client_ip)
+        projected = usage['used_bytes'] + int(incoming_size)
+        if projected > usage['quota_bytes']:
+            raise ValidationError(
+                'Storage limit reached for free plan. '
+                f'Used {FileService._format_size(usage["used_bytes"])} of '
+                f'{FileService._format_size(usage["quota_bytes"])}.',
+            )
+
+    @staticmethod
+    def get(file_id, client_ip=None):
+        file_record = File.query.join(
+            Dataroom, File.dataroom_id == Dataroom.id
+        ).filter(
             File.id == str(file_id),
             File.deleted_at.is_(None),
+            Dataroom.created_by_ip == client_ip,
+            Dataroom.deleted_at.is_(None),
         ).first()
         if not file_record:
             raise NotFoundError(f'File {file_id} not found')
         return file_record
 
     @staticmethod
-    def get_storage_path(file_id):
-        file_record = FileService.get(file_id)
-        storage = build_storage_backend(current_app.config)
-        if storage.name != 'local':
-            raise ValidationError('get_storage_path is only available for local storage backend')
-        storage_dir = current_app.config['STORAGE_PATH']
-        abs_path = os.path.join(os.path.abspath(storage_dir), file_record.storage_path)
-        if not os.path.isfile(abs_path):
-            raise NotFoundError('File content not found on disk')
-        return abs_path
-
-    @staticmethod
-    def get_content(file_id):
-        file_record = FileService.get(file_id)
+    def get_content(file_id, client_ip=None):
+        file_record = FileService.get(file_id, client_ip=client_ip)
         storage = build_storage_backend(current_app.config)
         return storage.read(file_record.storage_path)
 
     @staticmethod
-    def rename(file_id, name):
+    def rename(file_id, name, client_ip=None):
         if not name or not isinstance(name, str):
             raise ValidationError('Name is required')
 
@@ -171,7 +206,7 @@ class FileService:
         if not name.lower().endswith('.pdf'):
             raise ValidationError('File name must end with .pdf')
 
-        file_record = FileService.get(file_id)
+        file_record = FileService.get(file_id, client_ip=client_ip)
 
         # Check uniqueness in same location
         uniqueness_query = File.query.filter(
@@ -196,7 +231,7 @@ class FileService:
         return file_record
 
     @staticmethod
-    def delete(file_id):
-        file_record = FileService.get(file_id)
+    def delete(file_id, client_ip=None):
+        file_record = FileService.get(file_id, client_ip=client_ip)
         file_record.deleted_at = datetime.now(timezone.utc)
         db.session.commit()

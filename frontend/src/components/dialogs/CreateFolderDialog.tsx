@@ -37,12 +37,12 @@ export function CreateFolderDialog({
     setLoading(true);
     try {
       await api.createFolder(dataroomId, name.trim(), parentId);
-      toast.success('Folder created');
+      toast.success('Folder created.');
       setName('');
       onCreated();
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create folder');
+      toast.error(err instanceof Error ? err.message : 'Could not create folder.');
     } finally {
       setLoading(false);
     }
@@ -62,7 +62,7 @@ export function CreateFolderDialog({
           <DialogHeader>
             <DialogTitle>New Folder</DialogTitle>
             <DialogDescription>
-              Create a new folder to organize your files.
+              Add a folder in the current location.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">

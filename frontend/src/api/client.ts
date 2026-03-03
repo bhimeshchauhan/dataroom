@@ -5,6 +5,7 @@ import type {
   ContentsResponse,
   Pagination,
   TreeNode,
+  StorageUsage,
 } from '@/types';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -64,14 +65,25 @@ export const api = {
     sortBy = 'name',
     sortOrder = 'asc',
     page = 1,
-    perPage = 20
-  ) =>
-    request<ContentsResponse>(
-      `/datarooms/${id}/contents?sort_by=${sortBy}&sort_order=${sortOrder}&page=${page}&per_page=${perPage}`
-    ),
+    perPage = 20,
+    search = ''
+  ) => {
+    const params = new URLSearchParams({
+      sort_by: sortBy,
+      sort_order: sortOrder,
+      page: String(page),
+      per_page: String(perPage),
+    });
+    if (search.trim()) params.set('search', search.trim());
+    return request<ContentsResponse>(
+      `/datarooms/${id}/contents?${params.toString()}`
+    );
+  },
 
   getTree: (dataroomId: string) =>
     request<{ tree: TreeNode[] }>(`/datarooms/${dataroomId}/tree`),
+
+  getStorageUsage: () => request<StorageUsage>('/storage/usage'),
 
   // Folders
   createFolder: (
@@ -89,11 +101,20 @@ export const api = {
     sortBy = 'name',
     sortOrder = 'asc',
     page = 1,
-    perPage = 20
-  ) =>
-    request<ContentsResponse>(
-      `/folders/${folderId}/contents?sort_by=${sortBy}&sort_order=${sortOrder}&page=${page}&per_page=${perPage}`
-    ),
+    perPage = 20,
+    search = ''
+  ) => {
+    const params = new URLSearchParams({
+      sort_by: sortBy,
+      sort_order: sortOrder,
+      page: String(page),
+      per_page: String(perPage),
+    });
+    if (search.trim()) params.set('search', search.trim());
+    return request<ContentsResponse>(
+      `/folders/${folderId}/contents?${params.toString()}`
+    );
+  },
 
   renameFolder: (folderId: string, name: string) =>
     request<Folder>(`/folders/${folderId}`, {

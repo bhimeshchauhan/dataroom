@@ -61,7 +61,7 @@ export function RenameDialog({
           <DialogHeader>
             <DialogTitle>Rename {itemType}</DialogTitle>
             <DialogDescription>
-              Enter a new name for this {itemType}.
+              Choose a new name.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">

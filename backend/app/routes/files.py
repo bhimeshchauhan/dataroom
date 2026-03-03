@@ -10,6 +10,8 @@ from app.schemas import (
     RenameSchema,
     AppErrorSchema,
 )
+from app.extensions import limiter
+from app.utils.request_context import get_client_ip
 
 files_bp = Blueprint(
     'files',
@@ -26,6 +28,7 @@ class DataroomFiles(MethodView):
     @files_bp.alt_response(400, schema=AppErrorSchema, description='Validation error')
     @files_bp.alt_response(404, schema=AppErrorSchema, description='Dataroom or folder not found')
     @files_bp.alt_response(409, schema=AppErrorSchema, description='Duplicate filename')
+    @limiter.limit('10/5minutes')
     @files_bp.doc(
         description='Upload a PDF file to a dataroom.',
         requestBody={
@@ -58,6 +61,7 @@ class DataroomFiles(MethodView):
             dataroom_id=dataroom_id,
             file=file,
             folder_id=folder_id,
+            client_ip=get_client_ip(request),
         )
         return jsonify(file_record.to_dict()), 201
 
@@ -67,28 +71,32 @@ class FileDetail(MethodView):
 
     @files_bp.response(200, FileSchema)
     @files_bp.alt_response(404, schema=AppErrorSchema, description='File not found')
+    @limiter.limit('120/minute')
     def get(self, file_id):
         """Get file metadata."""
-        file_record = FileService.get(file_id)
+        file_record = FileService.get(file_id, client_ip=get_client_ip(request))
         return jsonify(file_record.to_dict()), 200
 
     @files_bp.arguments(RenameSchema, location='json')
     @files_bp.response(200, FileSchema)
     @files_bp.alt_response(404, schema=AppErrorSchema, description='File not found')
     @files_bp.alt_response(409, schema=AppErrorSchema, description='Duplicate filename')
+    @limiter.limit('30/minute')
     def patch(self, json_data, file_id):
         """Rename a file."""
         file_record = FileService.rename(
             file_id=file_id,
             name=json_data.get('name'),
+            client_ip=get_client_ip(request),
         )
         return jsonify(file_record.to_dict()), 200
 
     @files_bp.response(204)
     @files_bp.alt_response(404, schema=AppErrorSchema, description='File not found')
+    @limiter.limit('20/minute')
     def delete(self, file_id):
         """Delete a file (soft-delete)."""
-        FileService.delete(file_id)
+        FileService.delete(file_id, client_ip=get_client_ip(request))
         return '', 204
 
 
@@ -97,13 +105,15 @@ class FileContent(MethodView):
 
     @files_bp.response(200, description='PDF file content')
     @files_bp.alt_response(404, schema=AppErrorSchema, description='File not found')
+    @limiter.limit('60/minute')
     @files_bp.doc(
         produces=['application/pdf'],
     )
     def get(self, file_id):
         """Download file content."""
-        file_record = FileService.get(file_id)
-        content = FileService.get_content(file_id)
+        client_ip = get_client_ip(request)
+        file_record = FileService.get(file_id, client_ip=client_ip)
+        content = FileService.get_content(file_id, client_ip=client_ip)
         return send_file(
             BytesIO(content),
             mimetype='application/pdf',
